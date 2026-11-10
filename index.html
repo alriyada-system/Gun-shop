@@ -1203,6 +1203,7 @@ function fld(f, val) {
   else if (f.t === 'check') inner = `<label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="${id}" style="width:auto"${v ? ' checked' : ''}${f.dis ? ' disabled' : ''}> ${esc(f.l)}</label>`;
   else if (f.t === 'date') inner = `<input type="date" id="${id}" value="${esc(v)}" lang="en" dir="ltr"${req}${ro}>`;
   else if (f.t === 'num') inner = `<input type="text" id="${id}" value="${esc(v)}" inputmode="decimal" dir="ltr" lang="en"${req}${ro}>`;
+  else if (f.t === 'password') inner = `<input type="password" id="${id}" value="" autocomplete="new-password" dir="ltr"${req}>`;
   else if (f.t === 'file') inner = `<input type="file" id="${id}" accept="${esc(f.accept || '')}">`;
   else inner = `<input type="${f.t === 'email' ? 'email' : 'text'}" id="${id}" value="${esc(v)}"${f.t === 'email' || f.ltr ? ' dir="ltr"' : ''}${req}${ro}${f.ph ? ` placeholder="${esc(f.ph)}"` : ''}>`;
   return `<div class="${cls}">${f.t === 'check' ? '' : lbl}${inner}${f.note ? `<div class="muted">${esc(f.note)}</div>` : ''}</div>`;
@@ -1216,7 +1217,7 @@ function readForm(root, fields) {
   fields.forEach(f => {
     const e = $('#f_' + f.k, root); if (!e) return;
     if (f.t === 'check') o[f.k] = e.checked; else if (f.t === 'num') o[f.k] = e.value.trim() === '' ? null : nz(e.value);
-    else if (f.t === 'file') o[f.k] = e.files && e.files[0] || null; else { const v = e.value.trim(); o[f.k] = v === '' ? null : v; }
+    else if (f.t === 'file') o[f.k] = e.files && e.files[0] || null; else if (f.t === 'password') o[f.k] = e.value; else { const v = e.value.trim(); o[f.k] = v === '' ? null : v; }
   });
   return o;
 }
@@ -1332,12 +1333,11 @@ function tableHtmlForPdf(o) {
 }
 async function exportPdf(o) {
   if (!(await ensureLib('html2pdf'))) { toast(L('تعذّر تحميل مكتبة PDF', 'Could not load PDF library'), 'err'); return; }
-  const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + (o.portrait ? '190mm' : '277mm') + ';background:#fff;padding:6px;font-family:Tajawal,Tahoma,sans-serif;color:#222;direction:' + (LANG === 'en' ? 'ltr' : 'rtl');
+  const host = document.createElement('div'); host.style.cssText = 'width:' + (o.portrait ? '190mm' : '277mm') + ';background:#fff;padding:6px;font-family:Tajawal,Tahoma,sans-serif;color:#222;direction:' + (LANG === 'en' ? 'ltr' : 'rtl');
   const stats = (o.summary || []).length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${o.summary.map(s => `<div style="border:1px solid #e3ebf1;border-top:3px solid #0093c4;border-radius:8px;padding:5px 12px;min-width:120px"><div style="font-size:10px;color:#888">${esc(s[0])}</div><div style="font-weight:700;color:#0093c4;direction:ltr;text-align:start">${esc(s[1])}</div></div>`).join('')}</div>` : '';
   host.innerHTML = reportHeaderHtml(o.title, o.filters) + stats + tableHtmlForPdf(o) + `<div style="margin-top:10px;font-size:10px;color:#888;text-align:center">${esc(CO.report_footer || '')}</div>`;
-  document.body.appendChild(host);
-  try { await html2pdf().set({ margin: [8, 8, 10, 8], filename: (o.file || o.title) + '_' + today() + '.pdf', image: { type: 'jpeg', quality: .96 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: o.portrait ? 'portrait' : 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: 'tr' } }).from(host).save(); }
-  finally { host.remove(); }
+  try { await html2pdf().set({ margin: [8, 8, 10, 8], filename: (o.file || o.title) + '_' + today() + '.pdf', image: { type: 'jpeg', quality: .96 }, html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: o.portrait ? 'portrait' : 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: 'tr' } }).from(host).save(); }
+  catch (e) { console.error(e); toast(L('تعذّر إنشاء ملف PDF', 'Could not create PDF'), 'err'); }
 }
 
 /* ============ قائمة إجراءات الصف (⋮) ============ */
@@ -2525,7 +2525,22 @@ async function usersTab(pane) {
     cols: [{ l: t('الاسم'), k: 'display_name', r: r => `<b>${esc(r.display_name || '—')}</b>` }, { l: L('البريد', 'Email'), k: 'email', r: r => `<span dir="ltr">${esc(r.email || '')}</span>` }, { l: L('الهاتف', 'Phone'), k: 'phone', r: r => dash(r.phone) }, { l: L('الدور', 'Role'), x: r => roleName(r.role), r: r => badge(r.role === 'pending' ? 'warn' : 'info', roleName(r.role)) }, { l: t('الحالة'), v: r => r.is_active ? 1 : 0, x: r => r.is_active ? L('نشط', 'Active') : L('موقوف', 'Inactive'), r: r => r.is_active ? badge('ok', L('نشط', 'Active')) : badge('bad', L('موقوف', 'Inactive')) }, { l: L('تاريخ التسجيل', 'Registered'), v: r => r.created_at, x: r => fd(r.created_at), r: r => fd(r.created_at) }],
     filters: [{ k: 'r', l: L('-- الدور --', '-- Role --'), opts: () => ROLE_KEYS.filter(k => k !== 'guest').map(k => ({ value: k, label: roleName(k) })), test: (r, v) => v.includes(r.role) }, { k: 's', l: L('-- الحالة --', '-- Status --'), opts: () => [{ value: '1', label: L('نشط', 'Active') }, { value: '0', label: L('موقوف', 'Inactive') }], test: (r, v) => v.includes(r.is_active ? '1' : '0') }],
     stats: l => [{ icon: '👥', label: L('المستخدمون', 'Users'), value: l.length }, { icon: '⏳', label: L('بانتظار التفعيل', 'Pending'), value: l.filter(r => r.role === 'pending').length, color: '#f39c12' }, { icon: '🚫', label: L('موقوفون', 'Inactive'), value: l.filter(r => !r.is_active).length, color: '#e74c3c' }],
-    onRow: r => ed && userForm(r), actions: r => [ed && { icon: 'fa-pen', color: '#f0ad4e', label: t('تعديل'), fn: () => userForm(r) }] }).setRows(rows);
+    toolbar: [{ label: L('مستخدم جديد', 'New user'), perm: ed, fn: newUserForm }], onRow: r => ed && userForm(r), actions: r => [ed && { icon: 'fa-pen', color: '#f0ad4e', label: t('تعديل'), fn: () => userForm(r) }] }).setRows(rows);
+}
+function newUserForm() {
+  formModal({ title: L('مستخدم جديد', 'New user'), icon: 'fa-user-plus', width: 600, cols: 2, okMsg: L('تم إنشاء المستخدم', 'User created'),
+    fields: [{ k: 'display_name', l: t('الاسم'), req: true }, { k: 'email', l: L('البريد الإلكتروني', 'Email'), t: 'email', req: true }, { k: 'password', l: L('كلمة المرور (8 أحرف على الأقل)', 'Password (min 8)'), t: 'password', req: true }, { k: 'role', l: L('الدور', 'Role'), t: 'select', blank: false, opts: ROLE_KEYS.filter(k => k !== 'guest' && k !== 'pending' && (k !== 'sysadmin' || ME.role === 'sysadmin')).map(k => ({ v: k, l: roleName(k) })) }, { k: 'phone', l: L('الهاتف', 'Phone'), ltr: true }, { k: 'job_title', l: L('المسمى الوظيفي', 'Job title') }],
+    values: { role: 'cashier' },
+    onSave: async v => {
+      if ((v.password || '').length < 8) throw new Error(L('كلمة المرور 8 أحرف على الأقل', 'Password must be at least 8 characters'));
+      // عميل مؤقت منفصل حتى لا تتبدّل جلسة المدير الحالية
+      const tmp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gs_tmp_signup' } });
+      const { data, error } = await tmp.auth.signUp({ email: v.email, password: v.password, options: { data: { display_name: v.display_name } } }); if (error) throw error;
+      const u = data && data.user; if (!u || (u.identities && !u.identities.length)) throw new Error(L('هذا البريد مسجّل مسبقاً', 'This email is already registered'));
+      try { await tmp.auth.signOut(); } catch (_) { }
+      await rpc('admin_update_user', { p_user: u.id, p: { display_name: v.display_name, phone: v.phone || '', job_title: v.job_title || '', role: v.role, is_active: true } });
+      refreshPage();
+    } });
 }
 function userForm(u) {
   formModal({ title: L('تعديل مستخدم: ', 'Edit user: ') + (u.display_name || u.email), icon: 'fa-user-pen', width: 560, cols: 2, fields: [{ k: 'display_name', l: t('الاسم') }, { k: 'phone', l: L('الهاتف', 'Phone'), ltr: true }, { k: 'job_title', l: L('المسمى الوظيفي', 'Job title') }, { k: 'role', l: L('الدور', 'Role'), t: 'select', blank: false, opts: ROLE_KEYS.filter(k => k !== 'guest').map(k => ({ v: k, l: roleName(k) })) }, { k: 'is_active', l: L('الحساب فعّال', 'Active'), t: 'check' }], values: u,
